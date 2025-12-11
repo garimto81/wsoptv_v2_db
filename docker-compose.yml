@@ -1,0 +1,85 @@
+# ============================================
+# PokerVOD Docker Compose Configuration
+# Full-stack deployment with PostgreSQL
+# ============================================
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: pokervod-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pokervod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pokervod}
+      POSTGRES_DB: ${POSTGRES_DB:-pokervod}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5435}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pokervod}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pokervod-network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pokervod-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pokervod}:${POSTGRES_PASSWORD:-pokervod}@postgres:5432/${POSTGRES_DB:-pokervod}
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # NAS Configuration
+      NAS_HOST: ${NAS_HOST:-10.10.100.122}
+      NAS_SHARE: ${NAS_SHARE:-docker}
+      NAS_BASE_PATH: ${NAS_BASE_PATH:-GGPNAs}
+      NAS_USERNAME: ${NAS_USERNAME:-GGP}
+      NAS_PASSWORD: ${NAS_PASSWORD}
+      NAS_PORT: ${NAS_PORT:-445}
+      NAS_TIMEOUT: ${NAS_TIMEOUT:-30}
+    ports:
+      - "${BACKEND_PORT:-8004}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+    networks:
+      - pokervod-network
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pokervod-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8000}
+    ports:
+      - "${FRONTEND_PORT:-3001}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - pokervod-network
+
+volumes:
+  postgres_data:
+    name: pokervod-postgres-data
+
+networks:
+  pokervod-network:
+    name: pokervod-network
+    driver: bridge
