@@ -135,6 +135,65 @@ class TestWSOPArchiveParser:
         assert result.event_name == "Main Event"
         assert result.year == 2005
 
+    def test_can_parse_excludes_mpp_folder(self):
+        """Test that WSOPArchiveParser excludes MPP folder files.
+
+        Issue #2: WSOPArchiveParser was matching MPP files due to broad ARCHIVE check.
+        """
+        parser = WSOPArchiveParser()
+
+        # MPP folder should be excluded even if ARCHIVE is in path
+        mpp_path = "GGPNAs/ARCHIVE/MPP/2025 Cyprus/Video"
+        mpp_file = "$1M GTD   $1K PokerOK Mystery Bounty ? Day 1A.mp4"
+
+        assert parser.can_parse(mpp_file, mpp_path) is False
+
+    def test_can_parse_excludes_hcl_folder(self):
+        """Test that WSOPArchiveParser excludes HCL folder files."""
+        parser = WSOPArchiveParser()
+
+        hcl_path = "GGPNAs/ARCHIVE/HCL/Season 10"
+        hcl_file = "HCL_S10_E01.mp4"
+
+        assert parser.can_parse(hcl_file, hcl_path) is False
+
+    def test_can_parse_excludes_gog_folder(self):
+        """Test that WSOPArchiveParser excludes GOG folder files."""
+        parser = WSOPArchiveParser()
+
+        gog_path = "GGPNAs/ARCHIVE/GOG 최종"
+        gog_file = "E01_GOG_final_edit_231106.mp4"
+
+        assert parser.can_parse(gog_file, gog_path) is False
+
+    def test_can_parse_excludes_ggmillions_folder(self):
+        """Test that WSOPArchiveParser excludes GGMillions folder files."""
+        parser = WSOPArchiveParser()
+
+        gg_path = "GGPNAs/ARCHIVE/GGMillions"
+        gg_file = "Super High Roller Poker FINAL TABLE with Phil Ivey.mp4"
+
+        assert parser.can_parse(gg_file, gg_path) is False
+
+    def test_can_parse_includes_wsop_archive(self):
+        """Test that WSOPArchiveParser includes WSOP ARCHIVE folder files."""
+        parser = WSOPArchiveParser()
+
+        wsop_path = "GGPNAs/ARCHIVE/WSOP/PRE-2016"
+        wsop_file = "some_video.mp4"
+
+        assert parser.can_parse(wsop_file, wsop_path) is True
+
+    def test_can_parse_pattern_match_always_works(self):
+        """Test that pattern-matched files are always parsed regardless of path."""
+        parser = WSOPArchiveParser()
+
+        # Pattern match should work even without WSOP in path
+        random_path = "some/random/folder"
+        pattern_file = "wsop-2005-me-nobug.mp4"
+
+        assert parser.can_parse(pattern_file, random_path) is True
+
 
 class TestGGMillionsParser:
     """Test cases for GG Millions Parser.
