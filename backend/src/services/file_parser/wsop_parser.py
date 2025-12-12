@@ -129,16 +129,32 @@ class WSOPArchiveParser(BaseParser):
     )
 
     def can_parse(self, file_name: str, file_path: str) -> bool:
-        # 다른 프로젝트 파일 제외 (PAD, GOG, GGMillions 등)
+        # 패턴 매칭 우선
+        if self.PATTERN.match(file_name):
+            return True
+
+        # 폴더 경로 기반 매칭: WSOP 폴더 내 ARCHIVE만 허용
+        path_upper = file_path.upper()
+
+        # 다른 프로젝트 폴더 제외
+        other_projects = ["GGMILLIONS", "GOG", "MPP", "PAD", "HCL"]
+        for proj in other_projects:
+            if proj in path_upper:
+                return False
+
+        # 파일명 기반 제외
         name_upper = file_name.upper()
         if name_upper.startswith("PAD") or "PAD" in name_upper[:10]:
             return False
         if name_upper.startswith("GOG") or name_upper.startswith("E0"):
             return False
-        if "GGMILLIONS" in file_path.upper() or name_upper.startswith("GGM"):
+        if name_upper.startswith("GGM") or "SUPER HIGH ROLLER" in name_upper:
+            return False
+        if name_upper.startswith("$") and "GTD" in name_upper:  # MPP pattern
             return False
 
-        return bool(self.PATTERN.match(file_name)) or "ARCHIVE" in file_path.upper()
+        # WSOP 폴더 내의 ARCHIVE만 매칭
+        return "WSOP" in path_upper and "ARCHIVE" in path_upper
 
     def parse(self, file_name: str, file_path: str = "") -> ParsedMetadata:
         match = self.PATTERN.match(file_name)
