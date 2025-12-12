@@ -381,3 +381,75 @@ class NASFileService(BaseService[NASFile]):
             .group_by(NASFile.file_category)
         )
         return dict(result.all())
+
+    # ==================== 제외 파일 메서드 ====================
+
+    async def count_excluded(self) -> int:
+        """Count excluded files."""
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(NASFile)
+            .where(NASFile.is_excluded == True)  # noqa: E712
+        )
+        return result.scalar() or 0
+
+    async def get_excluded_files(
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Sequence[NASFile]:
+        """Get excluded files."""
+        result = await self.session.execute(
+            select(NASFile)
+            .where(NASFile.is_excluded == True)  # noqa: E712
+            .order_by(NASFile.file_path)
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+    async def mark_excluded(
+        self,
+        file_id: UUID,
+        *,
+        is_excluded: bool = True,
+        reason: Optional[str] = None,
+    ) -> Optional[NASFile]:
+        """Mark file as excluded from catalog."""
+        return await self.update(
+            file_id,
+            is_excluded=is_excluded,
+            exclude_reason=reason,
+        )
+
+    async def mark_excluded_by_path_pattern(
+        self,
+        pattern: str,
+        *,
+        reason: Optional[str] = None,
+    ) -> int:
+        """Mark all files matching path pattern as excluded.
+
+        Args:
+            pattern: Path pattern to match (e.g., '/Clips/')
+            reason: Reason for exclusion
+
+        Returns:
+            Number of files marked as excluded
+        """
+        # Get files matching pattern
+        result = await self.session.execute(
+            select(NASFile)
+            .where(NASFile.file_path.ilike(f"%{pattern}%"))
+            .where(NASFile.is_excluded == False)  # noqa: E712
+        )
+        files = result.scalars().all()
+
+        # Mark each as excluded
+        for file in files:
+            file.is_excluded = True
+            file.exclude_reason = reason
+
+        await self.session.flush()
+        return len(files)

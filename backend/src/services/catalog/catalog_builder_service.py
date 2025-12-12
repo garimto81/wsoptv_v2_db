@@ -22,6 +22,17 @@ from ...models.nas_file import NASFile, FileCategory
 from ..file_parser import ParserFactory, ParsedMetadata, TitleGenerator
 
 
+# 카탈로그 빌드 시 제외할 경로 패턴
+EXCLUDED_PATHS = [
+    "/Clips/",
+    "\\Clips\\",
+    "Clips/",
+    "/Player Emotion",
+    "\\Player Emotion",
+    "Player Emotion/",
+]
+
+
 @dataclass
 class BuildStats:
     """카탈로그 빌드 통계."""
@@ -85,6 +96,11 @@ class CatalogBuilderService:
             stats.nas_files_processed += 1
 
             try:
+                # 제외 경로 확인
+                if self._is_excluded_path(nas_file.file_path):
+                    stats.skipped += 1
+                    continue
+
                 # 파일명 파싱
                 parser = ParserFactory.get_parser(nas_file.file_name, nas_file.file_path)
                 metadata = parser.parse(nas_file.file_name, nas_file.file_path)
@@ -361,3 +377,16 @@ class CatalogBuilderService:
                 return Decimal(buy_in_str)
         except Exception:
             return None
+
+    def _is_excluded_path(self, file_path: str) -> bool:
+        """제외 경로 여부 확인.
+
+        Clips, Player Emotion 등 카탈로그에 포함하지 않을 폴더 경로 확인.
+        """
+        if not file_path:
+            return False
+
+        for pattern in EXCLUDED_PATHS:
+            if pattern in file_path:
+                return True
+        return False

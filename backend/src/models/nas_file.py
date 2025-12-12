@@ -32,6 +32,8 @@ class NASFile(Base, TimestampMixin):
     # Classification
     file_category: Mapped[str] = mapped_column(String(20), default="other")
     is_hidden_file: Mapped[bool] = mapped_column(default=False)
+    is_excluded: Mapped[bool] = mapped_column(default=False)
+    exclude_reason: Mapped[Optional[str]] = mapped_column(String(100), default=None)
 
     # Foreign keys
     video_file_id: Mapped[Optional[UUID]] = mapped_column(

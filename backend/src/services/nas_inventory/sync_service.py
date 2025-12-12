@@ -196,8 +196,12 @@ class NASSyncService:
 
     async def _process_file(self, result: ScanResult, stats: SyncStats) -> None:
         """Process file scan result."""
-        # Skip hidden system files
-        if result.is_hidden and result.name.startswith("."):
+        # Skip hidden system files (macOS/Windows metadata)
+        # .DS_Store, ._* (macOS resource forks), Thumbs.db (Windows thumbnails)
+        if result.is_hidden and (
+            result.name.startswith(".") or
+            result.name.lower() == "thumbs.db"
+        ):
             stats.files_skipped += 1
             return
 

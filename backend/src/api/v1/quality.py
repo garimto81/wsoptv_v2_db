@@ -33,7 +33,7 @@ router = APIRouter(prefix="/quality", tags=["quality"])
 class LinkageStatsResponse(BaseModel):
     """Overall linkage statistics."""
 
-    nas_files: dict[str, int]  # total, linked, unlinked
+    nas_files: dict[str, int]  # total, linked, unlinked, excluded
     video_files: dict[str, int]  # total, with_episode, without_episode
     episodes: dict[str, int]  # total, with_video, without_video
     hand_clips: dict[str, int]  # total, with_video, without_video
@@ -118,6 +118,7 @@ async def get_linkage_stats(
     nas_total = await nas_service.count()
     nas_linked = len(await nas_service.get_linked_videos(limit=10000))
     nas_unlinked = len(await nas_service.get_unlinked_videos(limit=10000))
+    nas_excluded = await nas_service.count_excluded()
 
     # HandClip stats
     all_clips = await hand_clip_service.get_all(limit=10000)
@@ -128,8 +129,8 @@ async def get_linkage_stats(
     all_episodes = await episode_service.get_all(limit=10000)
     total_episodes = len(all_episodes)
 
-    # Calculate overall linkage rate
-    total_items = nas_total + len(all_clips)
+    # Calculate overall linkage rate (excluding excluded files)
+    total_items = (nas_total - nas_excluded) + len(all_clips)
     linked_items = nas_linked + clips_with_video
     overall_rate = (linked_items / total_items * 100) if total_items > 0 else 0
 
@@ -138,6 +139,7 @@ async def get_linkage_stats(
             "total": nas_total,
             "linked": nas_linked,
             "unlinked": nas_unlinked,
+            "excluded": nas_excluded,
         },
         video_files={
             "total": nas_linked,  # Approximation
