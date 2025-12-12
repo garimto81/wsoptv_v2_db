@@ -135,6 +135,7 @@ class TestWSOPArchiveParser:
         assert result.event_name == "Main Event"
         assert result.year == 2005
 
+    # Issue #2 Tests: can_parse exclusions
     def test_can_parse_excludes_mpp_folder(self):
         """Test that WSOPArchiveParser excludes MPP folder files.
 
@@ -193,6 +194,59 @@ class TestWSOPArchiveParser:
         pattern_file = "wsop-2005-me-nobug.mp4"
 
         assert parser.can_parse(pattern_file, random_path) is True
+
+    # Issue #3 Tests: year extraction
+    def test_year_extraction_skips_pre_pattern(self):
+        """Test that year extraction skips PRE-YYYY pattern.
+
+        Issue #3: Path 'PRE-2016' was extracting 2016 instead of actual year.
+        """
+        parser = WSOPArchiveParser()
+
+        # File has year 2010, path has PRE-2016
+        path = "WSOP ARCHIVE (PRE-2016)/WSOP 2010/Masters"
+        filename = "2010 WSOP ME25.mov"
+
+        result = parser.parse(filename, path)
+
+        assert result.year == 2010  # Should be 2010, not 2016
+
+    def test_year_extraction_from_filename_priority(self):
+        """Test that filename year takes priority over path year."""
+        parser = WSOPArchiveParser()
+
+        path = "ARCHIVE/WSOP/2020"
+        filename = "ESPN 2007 WSOP SEASON 5.mp4"
+
+        result = parser.parse(filename, path)
+
+        assert result.year == 2007  # Filename year, not path year 2020
+
+    def test_year_extraction_fallback_to_path(self):
+        """Test fallback to path when filename has no year."""
+        parser = WSOPArchiveParser()
+
+        path = "ARCHIVE/WSOP/2015/videos"
+        filename = "random_video.mp4"
+
+        result = parser.parse(filename, path)
+
+        assert result.year == 2015  # Path year since filename has none
+
+    def test_year_extraction_pre_2016_folder(self):
+        """Test various PRE-2016 archive files extract correct year."""
+        parser = WSOPArchiveParser()
+
+        test_cases = [
+            ("2010 WSOP ME25.mov", "WSOP ARCHIVE (PRE-2016)/2010", 2010),
+            ("ESPN 2007 WSOP SEASON 5.mp4", "ARCHIVE/PRE-2016/WSOP", 2007),
+            ("WSOP_2008_19.mp4", "PRE-2016/WSOP", 2008),
+            ("WSOP 2005 Show 19.mp4", "pre-2016/WSOP", 2005),
+        ]
+
+        for filename, path, expected_year in test_cases:
+            result = parser.parse(filename, path)
+            assert result.year == expected_year, f"Failed for {filename}: expected {expected_year}, got {result.year}"
 
 
 class TestGGMillionsParser:
