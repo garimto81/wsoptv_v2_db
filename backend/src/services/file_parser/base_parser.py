@@ -52,6 +52,9 @@ class ParsedMetadata:
     parse_success: bool = False
     parser_used: str = ""
 
+    # 파싱 신뢰도 (0.0 ~ 1.0)
+    confidence: Optional[float] = None
+
     # 추가 필드
     extra: dict = field(default_factory=dict)
 
@@ -97,14 +100,20 @@ class BaseParser(ABC):
         return mapping.get(raw.lower(), raw.lower())
 
     def _extract_year(self, text: str) -> Optional[int]:
-        """연도 추출."""
+        """연도 추출.
+
+        PRE-YYYY, pre-YYYY 패턴은 제외하고 연도를 추출합니다.
+        """
+        # PRE-YYYY 패턴 제거 (대소문자 무관)
+        text_clean = re.sub(r"(?i)pre-\d{4}", "", text)
+
         # 4자리 연도
-        match = re.search(r"(19|20)\d{2}", text)
+        match = re.search(r"(19|20)\d{2}", text_clean)
         if match:
             return int(match.group())
 
         # 2자리 연도 (24 → 2024)
-        match = re.search(r"(?<!\d)(\d{2})(?!\d)", text)
+        match = re.search(r"(?<!\d)(\d{2})(?!\d)", text_clean)
         if match:
             year = int(match.group())
             return 2000 + year if year < 50 else 1900 + year

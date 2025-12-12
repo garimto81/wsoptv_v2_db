@@ -174,8 +174,12 @@ class WSOPArchiveParser(BaseParser):
                 confidence=0.85,  # Pattern match
             )
 
-        # 폴더 경로에서 연도 추출 시도
-        year = self._extract_year(file_path)
+        # 파일명에서 연도 추출 시도 (우선순위 높음)
+        year = self._extract_year(file_name)
+        # 파일명에서 못 찾으면 경로에서 추출
+        if year is None:
+            year = self._extract_year(file_path)
+
         return ParsedMetadata(
             project_code="WSOP",
             year=year,
