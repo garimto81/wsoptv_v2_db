@@ -362,3 +362,152 @@ class TestParserFactory:
 
         assert hidden is False
         assert reason is None
+
+
+class TestParserConfidence:
+    """Test cases for parser confidence values.
+
+    Issue #1: All parsers should set confidence field appropriately.
+    - Pattern match: confidence >= 0.7
+    - Path inference: confidence 0.3~0.6
+    - Parse failure: confidence < 0.3
+    """
+
+    def test_wsop_bracelet_confidence_on_match(self):
+        """WSOP Bracelet: High confidence on pattern match."""
+        parser = WSOPBraceletParser()
+        filename = "10-wsop-2024-be-ev-21-25k-nlh-hr-ft.mp4"
+
+        result = parser.parse(filename, "")
+
+        assert result.confidence is not None
+        assert result.confidence >= 0.9
+
+    def test_wsop_circuit_confidence_on_match(self):
+        """WSOP Circuit: High confidence on pattern match."""
+        parser = WSOPCircuitParser()
+        filename = "WCLA24-15.mp4"
+
+        result = parser.parse(filename, "")
+
+        assert result.confidence is not None
+        assert result.confidence >= 0.85
+
+    def test_wsop_archive_confidence_on_pattern_match(self):
+        """WSOP Archive: High confidence on pattern match."""
+        parser = WSOPArchiveParser()
+        filename = "wsop-2015-me-nobug.mp4"
+
+        result = parser.parse(filename, "")
+
+        assert result.confidence is not None
+        assert result.confidence >= 0.8
+
+    def test_wsop_archive_confidence_on_path_inference(self):
+        """WSOP Archive: Lower confidence on path-based inference."""
+        parser = WSOPArchiveParser()
+        filename = "random_video.mp4"
+        path = "/ARCHIVE/WSOP/2010/random_video.mp4"
+
+        result = parser.parse(filename, path)
+
+        assert result.confidence is not None
+        assert 0.2 <= result.confidence <= 0.5
+
+    def test_ggmillions_confidence_on_match(self):
+        """GG Millions: High confidence on pattern match."""
+        parser = GGMillionsParser()
+        filename = "250507_Super High Roller Poker FINAL TABLE with Phil Ivey.mp4"
+
+        result = parser.parse(filename, "")
+
+        assert result.confidence is not None
+        assert result.confidence >= 0.85
+
+    def test_ggmillions_confidence_on_no_match(self):
+        """GG Millions: Low confidence when pattern doesn't match."""
+        parser = GGMillionsParser()
+        filename = "random_video.mp4"
+
+        result = parser.parse(filename, "/GGMillions/random_video.mp4")
+
+        assert result.confidence is not None
+        assert result.confidence < 0.5
+
+    def test_gog_confidence_on_8digit_match(self):
+        """GOG: Highest confidence on 8-digit date pattern."""
+        parser = GOGParser()
+        filename = "E07_GOG_final_edit_20231121.mp4"
+
+        result = parser.parse(filename, "")
+
+        assert result.confidence is not None
+        assert result.confidence >= 0.9
+
+    def test_gog_confidence_on_6digit_match(self):
+        """GOG: High confidence on 6-digit date pattern."""
+        parser = GOGParser()
+        filename = "E01_GOG_final_edit_231106.mp4"
+
+        result = parser.parse(filename, "")
+
+        assert result.confidence is not None
+        assert result.confidence >= 0.85
+
+    def test_pad_confidence_s12_pattern(self):
+        """PAD: Highest confidence on S12 pattern."""
+        parser = PADParser()
+        filename = "pad-s12-ep01-12345.mp4"
+
+        result = parser.parse(filename, "")
+
+        assert result.confidence is not None
+        assert result.confidence >= 0.9
+
+    def test_pad_confidence_s13_pattern(self):
+        """PAD: High confidence on S13 pattern."""
+        parser = PADParser()
+        filename = "PAD_S13_EP01_HD-12345.mp4"
+
+        result = parser.parse(filename, "")
+
+        assert result.confidence is not None
+        assert result.confidence >= 0.85
+
+    def test_mpp_confidence_on_match(self):
+        """MPP: High confidence on pattern match."""
+        parser = MPPParser()
+        filename = "$1M GTD   $1K PokerOK Mystery Bounty ? Day 1A.mp4"
+
+        result = parser.parse(filename, "")
+
+        assert result.confidence is not None
+        assert result.confidence >= 0.8
+
+    def test_generic_confidence_with_project_and_year(self):
+        """Generic: Medium-low confidence with project and year extracted."""
+        parser = GenericParser()
+        filename = "Poker_2023_Final.mp4"
+        path = "/WSOP/videos/Poker_2023_Final.mp4"
+
+        result = parser.parse(filename, path)
+
+        assert result.confidence is not None
+        assert 0.35 <= result.confidence <= 0.50
+
+    def test_generic_confidence_without_info(self):
+        """Generic: Low confidence with minimal info."""
+        parser = GenericParser()
+        filename = "random_video.mp4"
+
+        result = parser.parse(filename, "")
+
+        assert result.confidence is not None
+        assert result.confidence <= 0.30
+
+    def test_factory_parse_returns_confidence(self):
+        """ParserFactory.parse() should return metadata with confidence."""
+        result = ParserFactory.parse("01-wsop-2024-be-ev-01-10k-nlh-ft.mp4")
+
+        assert result.confidence is not None
+        assert result.confidence > 0

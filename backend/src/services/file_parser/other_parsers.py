@@ -47,6 +47,7 @@ class GGMillionsParser(BaseParser):
                 raw_path=file_path,
                 parse_success=True,
                 parser_used=self.name,
+                confidence=0.90,  # Pattern match
             )
 
         return ParsedMetadata(
@@ -55,6 +56,7 @@ class GGMillionsParser(BaseParser):
             raw_path=file_path,
             parse_success=False,
             parser_used=self.name,
+            confidence=0.30,  # Folder-based inference only
         )
 
 
@@ -107,6 +109,7 @@ class GOGParser(BaseParser):
                 raw_path=file_path,
                 parse_success=True,
                 parser_used=self.name,
+                confidence=0.95,  # Full pattern match (8-digit date)
             )
 
         # 6자리 날짜 패턴
@@ -127,6 +130,7 @@ class GOGParser(BaseParser):
                 raw_path=file_path,
                 parse_success=True,
                 parser_used=self.name,
+                confidence=0.90,  # Pattern match (6-digit date)
             )
 
         return ParsedMetadata(
@@ -135,6 +139,7 @@ class GOGParser(BaseParser):
             raw_path=file_path,
             parse_success=False,
             parser_used=self.name,
+            confidence=0.30,  # Folder-based inference only
         )
 
 
@@ -170,6 +175,7 @@ class PADParser(BaseParser):
                 raw_path=file_path,
                 parse_success=True,
                 parser_used=self.name,
+                confidence=0.95,  # Full pattern match
             )
 
         # S13 패턴
@@ -186,6 +192,7 @@ class PADParser(BaseParser):
                 raw_path=file_path,
                 parse_success=True,
                 parser_used=self.name,
+                confidence=0.90,  # Pattern match
             )
 
         return ParsedMetadata(
@@ -194,6 +201,7 @@ class PADParser(BaseParser):
             raw_path=file_path,
             parse_success=False,
             parser_used=self.name,
+            confidence=0.30,  # Folder-based inference only
         )
 
 
@@ -234,6 +242,7 @@ class MPPParser(BaseParser):
                 raw_path=file_path,
                 parse_success=True,
                 parser_used=self.name,
+                confidence=0.85,  # Pattern match
             )
 
         return ParsedMetadata(
@@ -242,6 +251,7 @@ class MPPParser(BaseParser):
             raw_path=file_path,
             parse_success=False,
             parser_used=self.name,
+            confidence=0.30,  # Folder-based inference only
         )
 
     def _parse_amount(self, amount_str: str) -> Optional[int]:
@@ -280,6 +290,13 @@ class GenericParser(BaseParser):
         elif "GOG" in file_path:
             project_code = "GOG"
 
+        # Confidence based on how much info we could extract
+        conf = 0.20  # Base confidence for generic fallback
+        if project_code:
+            conf += 0.15  # +0.15 for project identification
+        if year:
+            conf += 0.10  # +0.10 for year extraction
+
         return ParsedMetadata(
             project_code=project_code,
             year=year,
@@ -287,4 +304,5 @@ class GenericParser(BaseParser):
             raw_path=file_path,
             parse_success=True,
             parser_used=self.name,
+            confidence=conf,  # 0.20 ~ 0.45 based on extracted info
         )

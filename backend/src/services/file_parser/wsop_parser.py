@@ -70,6 +70,7 @@ class WSOPBraceletParser(BaseParser):
             raw_path=file_path,
             parse_success=True,
             parser_used=self.name,
+            confidence=0.95,  # Full pattern match
         )
 
 
@@ -110,6 +111,7 @@ class WSOPCircuitParser(BaseParser):
             raw_path=file_path,
             parse_success=True,
             parser_used=self.name,
+            confidence=0.90,  # Pattern match
         )
 
 
@@ -153,6 +155,7 @@ class WSOPArchiveParser(BaseParser):
                 raw_path=file_path,
                 parse_success=True,
                 parser_used=self.name,
+                confidence=0.85,  # Pattern match
             )
 
         # 폴더 경로에서 연도 추출 시도
@@ -165,4 +168,5 @@ class WSOPArchiveParser(BaseParser):
             raw_path=file_path,
             parse_success=year is not None,
             parser_used=self.name,
+            confidence=0.40 if year else 0.20,  # Path-based inference
         )
