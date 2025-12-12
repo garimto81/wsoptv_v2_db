@@ -208,3 +208,55 @@ export interface BuildCatalogResponse {
   errors: number
   error_messages: string[]
 }
+
+// ==================== Catalog Validation Types ====================
+
+export interface CatalogSummaryByProject {
+  project_code: string
+  count: number
+  with_display_title: number
+  with_catalog_title: number
+  coverage_rate: number
+}
+
+export interface CatalogSummaryResponse {
+  total_items: number
+  by_project: CatalogSummaryByProject[]
+  by_year: Record<string, number>
+  by_category: Record<string, number>
+  with_display_title: number
+  with_catalog_title: number
+  title_coverage_rate: number
+}
+
+export interface CatalogSampleItem {
+  id: UUID
+  file_name: string
+  display_title?: string
+  catalog_title?: string
+  project_code: string
+  year?: number
+  event_number?: number
+  parser_used: string
+  extra_metadata?: Record<string, unknown>
+  is_valid: boolean
+}
+
+export interface CatalogSamplesResponse {
+  parser_name: string
+  total_count: number
+  samples: CatalogSampleItem[]
+}
+
+export interface TitleQualityResponse {
+  total_analyzed: number
+  title_length_distribution: Record<string, number>
+  issues_count: number
+  issues_sample: Array<{
+    id: string
+    title?: string
+    issue: string
+    project: string
+  }>
+  quality_score: number
+}

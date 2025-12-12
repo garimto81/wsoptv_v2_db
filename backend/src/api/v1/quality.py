@@ -783,3 +783,270 @@ async def validate_data_integrity(
         overall_status=overall_status,
         checks=checks,
     )
+
+
+# ==================== Catalog Validation Endpoints ====================
+
+
+class CatalogSummaryByProject(BaseModel):
+    """프로젝트별 카탈로그 요약."""
+
+    project_code: str
+    count: int
+    with_display_title: int
+    with_catalog_title: int
+    coverage_rate: float
+
+
+class CatalogSummaryResponse(BaseModel):
+    """카탈로그 전체 요약."""
+
+    total_items: int
+    by_project: list[CatalogSummaryByProject]
+    by_year: dict[str, int]
+    by_category: dict[str, int]
+    with_display_title: int
+    with_catalog_title: int
+    title_coverage_rate: float
+
+
+class CatalogSampleItem(BaseModel):
+    """카탈로그 샘플 아이템."""
+
+    id: UUID
+    file_name: str
+    display_title: Optional[str]
+    catalog_title: Optional[str]
+    project_code: str
+    year: Optional[int]
+    event_number: Optional[int]
+    parser_used: str
+    extra_metadata: Optional[dict]
+    is_valid: bool
+
+
+class CatalogSamplesResponse(BaseModel):
+    """파서별 카탈로그 샘플 목록."""
+
+    parser_name: str
+    total_count: int
+    samples: list[CatalogSampleItem]
+
+
+@router.get("/catalog/summary", response_model=CatalogSummaryResponse)
+async def get_catalog_summary(
+    db: AsyncSession = Depends(get_db),
+) -> CatalogSummaryResponse:
+    """카탈로그 전체 요약 통계.
+
+    - 프로젝트별 분포
+    - 연도별 분포
+    - 카테고리별 분포
+    - 제목 커버리지
+    """
+    from ...models.catalog_item import CatalogItem
+    from ...models.video_file import VideoFile
+    from ...services.file_parser import ParserFactory
+
+    # CatalogItem 전체 조회
+    result = await db.execute(select(CatalogItem))
+    items = result.scalars().all()
+
+    if not items:
+        return CatalogSummaryResponse(
+            total_items=0,
+            by_project=[],
+            by_year={},
+            by_category={},
+            with_display_title=0,
+            with_catalog_title=0,
+            title_coverage_rate=0.0,
+        )
+
+    # 프로젝트별 집계
+    project_stats: dict[str, dict[str, int]] = {}
+    for item in items:
+        code = item.project_code or "OTHER"
+        if code not in project_stats:
+            project_stats[code] = {"count": 0, "with_display": 0, "with_catalog": 0}
+        project_stats[code]["count"] += 1
+        if item.display_title:
+            project_stats[code]["with_display"] += 1
+        if item.catalog_title:
+            project_stats[code]["with_catalog"] += 1
+
+    by_project = [
+        CatalogSummaryByProject(
+            project_code=code,
+            count=stats["count"],
+            with_display_title=stats["with_display"],
+            with_catalog_title=stats["with_catalog"],
+            coverage_rate=round(stats["with_display"] / stats["count"] * 100, 1),
+        )
+        for code, stats in sorted(project_stats.items(), key=lambda x: -x[1]["count"])
+    ]
+
+    # 연도별 집계
+    by_year: dict[str, int] = {}
+    for item in items:
+        year_key = str(item.year) if item.year else "Unknown"
+        by_year[year_key] = by_year.get(year_key, 0) + 1
+
+    # 카테고리별 집계
+    by_category: dict[str, int] = {}
+    for item in items:
+        cat = item.category or "uncategorized"
+        by_category[cat] = by_category.get(cat, 0) + 1
+
+    # 제목 통계
+    with_display = sum(1 for item in items if item.display_title)
+    with_catalog = sum(1 for item in items if item.catalog_title)
+    coverage = round(with_display / len(items) * 100, 1) if items else 0.0
+
+    return CatalogSummaryResponse(
+        total_items=len(items),
+        by_project=by_project,
+        by_year=dict(sorted(by_year.items(), key=lambda x: x[0], reverse=True)),
+        by_category=by_category,
+        with_display_title=with_display,
+        with_catalog_title=with_catalog,
+        title_coverage_rate=coverage,
+    )
+
+
+@router.get("/catalog/samples", response_model=list[CatalogSamplesResponse])
+async def get_catalog_samples(
+    samples_per_parser: int = Query(5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+) -> list[CatalogSamplesResponse]:
+    """파서별 카탈로그 샘플.
+
+    각 파서(WSOP, GGM, PAD 등)별로 제목 생성 샘플을 제공합니다.
+    """
+    from ...models.catalog_item import CatalogItem
+    from ...models.video_file import VideoFile
+    from ...services.file_parser import ParserFactory
+
+    # VideoFile 조회 (CatalogItem과 조인)
+    result = await db.execute(
+        select(CatalogItem, VideoFile)
+        .join(VideoFile, CatalogItem.video_file_id == VideoFile.id)
+        .limit(5000)
+    )
+    rows = result.all()
+
+    # 파서별 그룹화
+    parser_samples: dict[str, list[CatalogSampleItem]] = {}
+
+    for catalog_item, video_file in rows:
+        # 파서 확인
+        try:
+            parser = ParserFactory.get_parser(
+                video_file.file_name,
+                video_file.file_path or ""
+            )
+            parser_name = parser.__class__.__name__
+        except Exception:
+            parser_name = "Generic"
+
+        if parser_name not in parser_samples:
+            parser_samples[parser_name] = []
+
+        # 샘플 추가 (제한까지)
+        if len(parser_samples[parser_name]) < samples_per_parser:
+            parser_samples[parser_name].append(
+                CatalogSampleItem(
+                    id=catalog_item.id,
+                    file_name=video_file.file_name,
+                    display_title=catalog_item.display_title,
+                    catalog_title=catalog_item.catalog_title,
+                    project_code=catalog_item.project_code,
+                    year=catalog_item.year,
+                    event_number=catalog_item.event_number,
+                    parser_used=parser_name,
+                    extra_metadata=catalog_item.extra_metadata,
+                    is_valid=bool(catalog_item.display_title),
+                )
+            )
+
+    # 응답 구성
+    responses = []
+    for parser_name, samples in sorted(parser_samples.items()):
+        # 전체 카운트 조회 (해당 파서)
+        total = len([s for s in samples])  # 샘플 수만 표시 (실제는 더 많을 수 있음)
+
+        responses.append(
+            CatalogSamplesResponse(
+                parser_name=parser_name,
+                total_count=total,
+                samples=samples,
+            )
+        )
+
+    return responses
+
+
+@router.get("/catalog/titles/quality", response_model=dict)
+async def get_title_quality_analysis(
+    limit: int = Query(1000, ge=1, le=10000),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """제목 품질 분석.
+
+    - 제목 길이 분포
+    - 공통 패턴 검출
+    - 품질 문제 목록
+    """
+    from ...models.catalog_item import CatalogItem
+
+    result = await db.execute(select(CatalogItem).limit(limit))
+    items = result.scalars().all()
+
+    # 제목 길이 분포
+    title_lengths: dict[str, int] = {
+        "short (< 30)": 0,
+        "medium (30-60)": 0,
+        "long (60-100)": 0,
+        "very_long (> 100)": 0,
+    }
+
+    # 품질 문제
+    issues: list[dict] = []
+
+    for item in items:
+        title = item.display_title or ""
+        length = len(title)
+
+        if length < 30:
+            title_lengths["short (< 30)"] += 1
+        elif length < 60:
+            title_lengths["medium (30-60)"] += 1
+        elif length < 100:
+            title_lengths["long (60-100)"] += 1
+        else:
+            title_lengths["very_long (> 100)"] += 1
+
+        # 품질 체크
+        if not title:
+            issues.append({
+                "id": str(item.id),
+                "issue": "missing_title",
+                "project": item.project_code,
+            })
+        elif title == item.catalog_title:
+            pass  # OK
+        elif title.startswith("NAS File:"):  # 파싱 실패
+            issues.append({
+                "id": str(item.id),
+                "title": title[:50],
+                "issue": "unparsed_fallback",
+                "project": item.project_code,
+            })
+
+    return {
+        "total_analyzed": len(items),
+        "title_length_distribution": title_lengths,
+        "issues_count": len(issues),
+        "issues_sample": issues[:20],
+        "quality_score": round((len(items) - len(issues)) / len(items) * 100, 1) if items else 0,
+    }

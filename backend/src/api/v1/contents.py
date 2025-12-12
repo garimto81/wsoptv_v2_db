@@ -7,12 +7,15 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Query
 
 from .deps import (
+    CatalogItemServiceDep,
     ProjectServiceDep,
     SeasonServiceDep,
     EventServiceDep,
     EpisodeServiceDep,
 )
 from .schemas import (
+    CatalogItemResponse,
+    CatalogBrowseResponse,
     ContentItem,
     FeaturedContent,
     ContentRow,
@@ -341,3 +344,74 @@ async def get_content(
         return None
 
     return _episode_to_content_item(episode, event, season, project)
+
+
+# ==================== CatalogItem-based Endpoints ====================
+
+
+@router.get("/v2/browse", response_model=list[CatalogItemResponse])
+async def get_catalog_browse(
+    catalog_service: CatalogItemServiceDep,
+    project_code: Optional[str] = None,
+    category: Optional[str] = None,
+    year: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 20,
+) -> list[CatalogItemResponse]:
+    """Netflix-style browse using CatalogItem (optimized)."""
+    items = await catalog_service.get_browse_items(
+        project_code=project_code,
+        category=category,
+        year=year,
+        skip=skip,
+        limit=limit,
+    )
+    return [CatalogItemResponse.model_validate(item) for item in items]
+
+
+@router.get("/v2/featured", response_model=list[CatalogItemResponse])
+async def get_catalog_featured(
+    catalog_service: CatalogItemServiceDep,
+    limit: int = 5,
+) -> list[CatalogItemResponse]:
+    """Get featured content from CatalogItem."""
+    items = await catalog_service.get_featured_items(limit=limit)
+    return [CatalogItemResponse.model_validate(item) for item in items]
+
+
+@router.get("/v2/top10", response_model=list[CatalogItemResponse])
+async def get_catalog_top10(
+    catalog_service: CatalogItemServiceDep,
+    project_code: Optional[str] = None,
+) -> list[CatalogItemResponse]:
+    """Get Top 10 from CatalogItem."""
+    items = await catalog_service.get_top10_items(project_code=project_code)
+    return [CatalogItemResponse.model_validate(item) for item in items]
+
+
+@router.get("/v2/project/{project_code}", response_model=list[CatalogItemResponse])
+async def get_catalog_by_project(
+    project_code: str,
+    catalog_service: CatalogItemServiceDep,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[CatalogItemResponse]:
+    """Get catalog items by project code."""
+    items = await catalog_service.get_by_project(
+        project_code=project_code.upper(),
+        skip=skip,
+        limit=limit,
+    )
+    return [CatalogItemResponse.model_validate(item) for item in items]
+
+
+@router.get("/v2/{catalog_id}", response_model=CatalogItemResponse | None)
+async def get_catalog_item(
+    catalog_id: UUID,
+    catalog_service: CatalogItemServiceDep,
+) -> CatalogItemResponse | None:
+    """Get single catalog item by ID."""
+    item = await catalog_service.get_by_id(catalog_id)
+    if not item:
+        return None
+    return CatalogItemResponse.model_validate(item)

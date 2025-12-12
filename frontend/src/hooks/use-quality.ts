@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { qualityApi } from '@/lib/api'
+import { qualityApi, catalogApi } from '@/lib/api'
 import type { BulkLinkRequest, BuildCatalogRequest } from '@/types/api'
 
 export const qualityKeys = {
@@ -63,5 +63,38 @@ export function useBuildCatalog() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: qualityKeys.all })
     },
+  })
+}
+
+// ==================== Catalog Validation Hooks ====================
+
+export const catalogKeys = {
+  all: ['catalog'] as const,
+  summary: () => [...catalogKeys.all, 'summary'] as const,
+  samples: (count?: number) => [...catalogKeys.all, 'samples', count] as const,
+  titleQuality: () => [...catalogKeys.all, 'title-quality'] as const,
+}
+
+export function useCatalogSummary() {
+  return useQuery({
+    queryKey: catalogKeys.summary(),
+    queryFn: catalogApi.getSummary,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useCatalogSamples(samplesPerParser = 5) {
+  return useQuery({
+    queryKey: catalogKeys.samples(samplesPerParser),
+    queryFn: () => catalogApi.getSamples(samplesPerParser),
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useTitleQuality(limit = 1000) {
+  return useQuery({
+    queryKey: catalogKeys.titleQuality(),
+    queryFn: () => catalogApi.getTitleQuality(limit),
+    staleTime: 5 * 60 * 1000,
   })
 }

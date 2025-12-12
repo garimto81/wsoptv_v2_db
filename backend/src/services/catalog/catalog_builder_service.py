@@ -18,8 +18,10 @@ from ...models.season import Season
 from ...models.event import Event
 from ...models.episode import Episode
 from ...models.video_file import VideoFile
-from ...models.nas_file import NASFile, FileCategory
+from ...models.nas_file import NASFile, FileCategory, ParseStatus
+from ...models.catalog_item import CatalogItem
 from ..file_parser import ParserFactory, ParsedMetadata, TitleGenerator
+import json
 
 
 # 카탈로그 빌드 시 제외할 경로 패턴
@@ -43,6 +45,7 @@ class BuildStats:
     events_created: int = 0
     episodes_created: int = 0
     video_files_created: int = 0
+    catalog_items_created: int = 0
     links_created: int = 0
     skipped: int = 0
     errors: int = 0
@@ -306,7 +309,7 @@ class CatalogBuilderService:
         metadata: ParsedMetadata,
         stats: BuildStats,
     ) -> Optional[VideoFile]:
-        """VideoFile 생성."""
+        """VideoFile 생성 및 CatalogItem 자동 생성."""
         # 이미 같은 경로로 VideoFile이 있는지 확인
         result = await self.session.execute(
             select(VideoFile).where(VideoFile.file_path == nas_file.file_path)
@@ -316,6 +319,15 @@ class CatalogBuilderService:
         if existing:
             # 이미 존재하면 NASFile만 연결
             nas_file.video_file_id = existing.id
+            # NASFile 파싱 상태 업데이트
+            nas_file.parse_status = ParseStatus.MATCHED
+            nas_file.match_confidence = 1.0
+
+            # 기존 VideoFile에 대해서도 CatalogItem 생성 (없으면)
+            display_title, catalog_title = self.title_generator.generate(metadata)
+            await self._create_catalog_item(
+                existing, existing.episode_id, metadata, display_title, catalog_title, stats
+            )
             return existing
 
         # 제목 생성
@@ -340,7 +352,151 @@ class CatalogBuilderService:
         await self.session.flush()
         stats.video_files_created += 1
 
+        # NASFile 파싱 메타데이터 저장
+        nas_file.parsed_metadata = self._metadata_to_dict(metadata)
+        nas_file.parse_status = ParseStatus.PARSED
+        nas_file.match_confidence = metadata.confidence or 0.8
+
+        # CatalogItem 자동 생성
+        catalog_item = await self._create_catalog_item(
+            video_file, episode_id, metadata, display_title, catalog_title, stats
+        )
+
         return video_file
+
+    async def _create_catalog_item(
+        self,
+        video_file: VideoFile,
+        episode_id: UUID,
+        metadata: ParsedMetadata,
+        display_title: str,
+        catalog_title: str,
+        stats: BuildStats,
+    ) -> Optional[CatalogItem]:
+        """CatalogItem 생성 (Netflix UI용 플랫 카탈로그)."""
+        # 이미 해당 VideoFile에 대한 CatalogItem이 있는지 확인
+        result = await self.session.execute(
+            select(CatalogItem).where(CatalogItem.video_file_id == video_file.id)
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            return existing
+
+        # 태그 생성
+        tags = self._generate_tags(metadata)
+
+        # CatalogItem 생성
+        catalog_item = CatalogItem(
+            video_file_id=video_file.id,
+            episode_id=episode_id,
+            display_title=display_title,
+            catalog_title=catalog_title,
+            project_code=metadata.project_code or "UNKNOWN",
+            category=self._get_category(metadata),
+            content_type=metadata.content_type,
+            tags=tags,
+            year=metadata.year,
+            event_number=metadata.event_number,
+            episode_number=metadata.episode_number,
+            day_number=metadata.day_number,
+            duration_seconds=None,  # VideoFile에서 추후 업데이트
+            extra_metadata=self._build_extra_metadata(metadata),
+            is_published=True,
+            is_featured=False,
+        )
+        self.session.add(catalog_item)
+        await self.session.flush()
+        stats.catalog_items_created += 1
+
+        return catalog_item
+
+    def _metadata_to_dict(self, metadata: ParsedMetadata) -> dict:
+        """ParsedMetadata를 dict로 변환 (JSONB 저장용)."""
+        return {
+            "project_code": metadata.project_code,
+            "year": metadata.year,
+            "event_number": metadata.event_number,
+            "event_name": metadata.event_name,
+            "event_name_short": metadata.event_name_short,
+            "episode_number": metadata.episode_number,
+            "day_number": metadata.day_number,
+            "part_number": metadata.part_number,
+            "episode_type": metadata.episode_type,
+            "table_type": metadata.table_type,
+            "content_type": metadata.content_type,
+            "version_type": metadata.version_type,
+            "event_type": metadata.event_type,
+            "game_type": metadata.game_type,
+            "buy_in": metadata.buy_in,
+            "venue": metadata.venue,
+            "location": metadata.location,
+            "display_title": metadata.display_title,
+            "confidence": metadata.confidence,
+        }
+
+    def _generate_tags(self, metadata: ParsedMetadata) -> list[str]:
+        """메타데이터에서 태그 생성."""
+        tags = []
+
+        # 이벤트 타입 태그
+        if metadata.episode_type:
+            tags.append(metadata.episode_type.lower().replace(" ", "_"))
+
+        # 테이블 타입 태그
+        if metadata.table_type:
+            tags.append(metadata.table_type.lower().replace(" ", "_"))
+
+        # 게임 타입 태그
+        if metadata.game_type:
+            tags.append(metadata.game_type.lower())
+
+        # 콘텐츠 타입 태그
+        if metadata.content_type:
+            tags.append(metadata.content_type.lower())
+
+        # 특별 이벤트 태그
+        if metadata.event_name_short:
+            name_lower = metadata.event_name_short.lower()
+            if "main event" in name_lower or "me" == name_lower:
+                tags.append("main_event")
+            if "final" in name_lower:
+                tags.append("final_table")
+
+        return list(set(tags))  # 중복 제거
+
+    def _get_category(self, metadata: ParsedMetadata) -> str:
+        """메타데이터에서 카테고리 결정.
+
+        - event_number가 없으면 TV Show (GOG, PAD, HCL 등)
+        - event_number가 있으면 Tournament (WSOP, MPP 등)
+        """
+        # event_number가 없으면 TV Show
+        if metadata.event_number is None:
+            return "tv_show"
+
+        # event_number가 있으면 토너먼트 계열
+        if metadata.event_type:
+            return metadata.event_type.lower()
+        if metadata.episode_type:
+            ep_type = metadata.episode_type.lower()
+            if "final" in ep_type:
+                return "final_table"
+            return ep_type
+        return "tournament"
+
+    def _build_extra_metadata(self, metadata: ParsedMetadata) -> dict:
+        """추가 메타데이터 구성."""
+        extra = {}
+        if metadata.buy_in:
+            extra["buy_in"] = metadata.buy_in
+        if metadata.venue:
+            extra["venue"] = metadata.venue
+        if metadata.location:
+            extra["location"] = metadata.location
+        if metadata.event_name:
+            extra["event_name"] = metadata.event_name
+        return extra if extra else None
 
     def _get_project_name(self, code: str) -> str:
         """프로젝트 코드에서 이름 생성."""

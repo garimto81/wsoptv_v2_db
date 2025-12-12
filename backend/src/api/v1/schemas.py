@@ -564,3 +564,70 @@ class ContinueWatchingItem(ContentItem):
 
     position_seconds: int
     last_watched: datetime
+
+
+# ==================== Catalog Item Schemas ====================
+
+
+class CatalogItemBase(BaseModel):
+    """Catalog item base schema."""
+
+    display_title: str
+    catalog_title: Optional[str] = None
+    description: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    project_code: str
+    category: Optional[str] = None
+    content_type: Optional[str] = None
+    tags: Optional[list[str]] = None
+    year: Optional[int] = None
+    event_number: Optional[int] = None
+    episode_number: Optional[int] = None
+    day_number: Optional[int] = None
+
+
+class CatalogItemResponse(CatalogItemBase, BaseSchema):
+    """Catalog item response schema."""
+
+    id: UUID
+    video_file_id: UUID
+    episode_id: Optional[UUID] = None
+    featured_rank: Optional[int] = None
+    top10_rank: Optional[int] = None
+    is_published: bool
+    is_featured: bool
+    extra_metadata: Optional[dict] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CatalogItemCreate(BaseModel):
+    """Catalog item create schema."""
+
+    video_file_id: UUID
+    display_title: Optional[str] = None
+    is_featured: bool = False
+    featured_rank: Optional[int] = None
+    top10_rank: Optional[int] = None
+
+
+class CatalogItemUpdate(BaseModel):
+    """Catalog item update schema."""
+
+    display_title: Optional[str] = None
+    catalog_title: Optional[str] = None
+    description: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    is_published: Optional[bool] = None
+    is_featured: Optional[bool] = None
+    featured_rank: Optional[int] = None
+    top10_rank: Optional[int] = None
+
+
+class CatalogBrowseResponse(BaseModel):
+    """Catalog browse response with CatalogItem."""
+
+    featured: Optional[CatalogItemResponse] = None
+    rows: list[ContentRow]
+    total: int

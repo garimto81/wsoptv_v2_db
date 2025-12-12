@@ -127,6 +127,15 @@ class WSOPArchiveParser(BaseParser):
     )
 
     def can_parse(self, file_name: str, file_path: str) -> bool:
+        # 다른 프로젝트 파일 제외 (PAD, GOG, GGMillions 등)
+        name_upper = file_name.upper()
+        if name_upper.startswith("PAD") or "PAD" in name_upper[:10]:
+            return False
+        if name_upper.startswith("GOG") or name_upper.startswith("E0"):
+            return False
+        if "GGMILLIONS" in file_path.upper() or name_upper.startswith("GGM"):
+            return False
+
         return bool(self.PATTERN.match(file_name)) or "ARCHIVE" in file_path.upper()
 
     def parse(self, file_name: str, file_path: str = "") -> ParsedMetadata:

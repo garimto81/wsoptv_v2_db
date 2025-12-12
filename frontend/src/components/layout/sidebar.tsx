@@ -14,6 +14,7 @@ import {
   GitBranch,
   Unlink,
   BarChart3,
+  ClipboardCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -49,6 +50,7 @@ const navItems: NavItem[] = [
     label: 'Catalog Linkage',
     icon: Link2,
     children: [
+      { href: '/catalog/validation', label: 'Validation', icon: ClipboardCheck },
       { href: '/catalog/hierarchy', label: 'Hierarchy', icon: GitBranch },
       { href: '/catalog/orphans', label: 'Orphans', icon: Unlink },
       { href: '/catalog/stats', label: 'Statistics', icon: BarChart3 },

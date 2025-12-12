@@ -93,12 +93,14 @@ class TitleGenerator:
         # GOG: 에피소드 기반
         if project_code == "GOG":
             parts.append("Game of Gold")
+            if m.year:
+                parts.append(str(m.year))
             if m.episode_number:
                 parts.append(f"Episode {m.episode_number}")
-            if m.version_type == "clean":
-                parts.append("(Clean Version)")
-            elif m.edit_date:
-                parts.append(f"({m.edit_date})")
+            if m.extra.get("is_final"):
+                parts.append("(Final)")
+            elif m.version_type == "clean":
+                parts.append("(Clean)")
             return " ".join(parts) if parts else self._fallback_title(m)
 
         # GGMillions: 피처드 플레이어
@@ -213,10 +215,14 @@ class TitleGenerator:
 
         # GOG
         if project_code == "GOG":
+            if m.year:
+                parts.append(f"'{str(m.year)[-2:]}")
             if m.episode_number:
                 parts.append(f"E{m.episode_number:02d}")
-            if m.version_type == "clean":
-                parts.append("(Clean)")
+            if m.extra.get("is_final"):
+                parts.append("Final")
+            elif m.version_type == "clean":
+                parts.append("Clean")
             return " ".join(parts) if parts else m.raw_filename[:30]
 
         # GGMillions

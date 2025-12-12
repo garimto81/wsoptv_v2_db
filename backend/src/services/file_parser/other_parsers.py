@@ -61,15 +61,22 @@ class GGMillionsParser(BaseParser):
 class GOGParser(BaseParser):
     """Game of Gold 파서.
 
-    패턴 A: E{번호}_GOG_final_edit_{YYYYMMDD}[_수정].mp4
+    패턴 A: E{번호}_GOG_final_edit_{YYYYMMDD}[_수정|_최종].mp4
     패턴 B: E{번호}_GOG_final_edit_클린본_{YYYYMMDD}.mp4
-    예시: E01_GOG_final_edit_231106.mp4
+    패턴 C: E{번호}_GOG_final_edit_{YYYYMMDD}_최종.mp4 (8자리 날짜)
+    예시: E01_GOG_final_edit_231106.mp4, E07_GOG_final_edit_20231121_최종.mp4
     """
 
     name = "gog"
 
-    PATTERN = re.compile(
-        r"^E(\d{1,3})_GOG_final_edit_(클린본_)?(\d{6})(?:_수정)?\.(mp4|mov)$",
+    # 6자리 날짜 패턴 (YYMMDD)
+    PATTERN_6 = re.compile(
+        r"^E(\d{1,3})_GOG_final_edit_(클린본_)?(\d{6})(?:_수정|_최종)?\.(mp4|mov)$",
+        re.IGNORECASE,
+    )
+    # 8자리 날짜 패턴 (YYYYMMDD)
+    PATTERN_8 = re.compile(
+        r"^E(\d{1,3})_GOG_final_edit_(클린본_)?(\d{8})(?:_수정|_최종)?\.(mp4|mov)$",
         re.IGNORECASE,
     )
 
@@ -77,11 +84,35 @@ class GOGParser(BaseParser):
         return "GOG" in file_path or "_GOG_" in file_name
 
     def parse(self, file_name: str, file_path: str = "") -> ParsedMetadata:
-        match = self.PATTERN.match(file_name)
-
+        # 8자리 날짜 패턴 먼저 시도
+        match = self.PATTERN_8.match(file_name)
         if match:
             ep_num, is_clean, date_str = match.groups()[:3]
+            year = int(date_str[:4])
+            edit_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
+            version_type = "clean" if is_clean else "final"
 
+            # _최종 체크
+            if "_최종" in file_name:
+                version_type = "final"
+
+            return ParsedMetadata(
+                project_code="GOG",
+                year=year,
+                episode_number=int(ep_num),
+                version_type=version_type,
+                edit_date=edit_date,
+                extra={"is_final": "_최종" in file_name or "final" in file_name.lower()},
+                raw_filename=file_name,
+                raw_path=file_path,
+                parse_success=True,
+                parser_used=self.name,
+            )
+
+        # 6자리 날짜 패턴
+        match = self.PATTERN_6.match(file_name)
+        if match:
+            ep_num, is_clean, date_str = match.groups()[:3]
             year = 2000 + int(date_str[:2])
             edit_date = f"20{date_str[:2]}-{date_str[2:4]}-{date_str[4:6]}"
             version_type = "clean" if is_clean else "final_edit"

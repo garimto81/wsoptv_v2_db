@@ -18,6 +18,9 @@ import type {
   HandClipLinkageStatsResponse,
   BuildCatalogRequest,
   BuildCatalogResponse,
+  CatalogSummaryResponse,
+  CatalogSamplesResponse,
+  TitleQualityResponse,
 } from '@/types/api'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8004'
@@ -102,4 +105,21 @@ export const syncApi = {
 export const handClipsApi = {
   getLinkageStats: () =>
     fetchApi<HandClipLinkageStatsResponse>('/api/v1/hand-clips/linkage-stats'),
+}
+
+// ==================== Catalog Validation API ====================
+
+export const catalogApi = {
+  getSummary: () =>
+    fetchApi<CatalogSummaryResponse>('/api/v1/quality/catalog/summary'),
+
+  getSamples: (samplesPerParser = 5) =>
+    fetchApi<CatalogSamplesResponse[]>(
+      `/api/v1/quality/catalog/samples?samples_per_parser=${samplesPerParser}`
+    ),
+
+  getTitleQuality: (limit = 1000) =>
+    fetchApi<TitleQualityResponse>(
+      `/api/v1/quality/catalog/titles/quality?limit=${limit}`
+    ),
 }
